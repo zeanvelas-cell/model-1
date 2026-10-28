@@ -475,7 +475,7 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
         }
     }
 
-    private func applyHardwareEncoder(size: CGSize, fps: Int, bitrateKbps: Int) async {
+    private func applyHardwareEncoder(size: CGSize, fps: Int, bitrateKbps: Int) async {try? 
         await mixer.setFrameRate(Float64(fps))
         var videoSettings = await rtmpStream.videoSettings
         videoSettings.videoSize = size
