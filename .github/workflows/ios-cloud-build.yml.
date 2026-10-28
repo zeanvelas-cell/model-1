@@ -1,0 +1,42 @@
+name: Build PulseLite Glass Broadcaster (Simulator + Physical IPA)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen & Generate Project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Resolve Swift Packages (HaishinKit 2.2.5)
+        run: xcodebuild -resolvePackageDependencies -project PulseLite.xcodeproj -scheme PulseLite
+
+      - name: Build Simulator Bundle (For Free Browser Testing on Appetize.io)
+        run: |
+          xcodebuild build             -project PulseLite.xcodeproj             -scheme PulseLite             -configuration Release             -sdk iphonesimulator             -derivedDataPath build-sim             CODE_SIGN_IDENTITY=""             CODE_SIGNING_REQUIRED=NO             CODE_SIGNING_ALLOWED=NO
+          cd build-sim/Build/Products/Release-iphonesimulator
+          zip -r -y ../../../../PulseLite-Simulator.zip PulseLite.app
+
+      - name: Build Physical iPhone Game Broadcaster (.ipa)
+        run: |
+          xcodebuild build             -project PulseLite.xcodeproj             -scheme PulseLite             -configuration Release             -sdk iphoneos             -derivedDataPath build-device             CODE_SIGN_IDENTITY=""             CODE_SIGNING_REQUIRED=NO             CODE_SIGNING_ALLOWED=NO
+          mkdir -p Payload
+          cp -r build-device/Build/Products/Release-iphoneos/PulseLite.app Payload/
+          zip -r -y PulseLite-Glass-Broadcaster.ipa Payload
+
+      - name: Upload Compiled App Artifacts (Simulator ZIP + Device IPA)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PulseLite-Glass-Builds
+          path: |
+            PulseLite-Simulator.zip
+            PulseLite-Glass-Broadcaster.ipa
