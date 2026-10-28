@@ -1,0 +1,109 @@
+name: PulseLite
+options:
+  bundleIdPrefix: com.pulselite
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  HaishinKit:
+    url: https://github.com/HaishinKit/HaishinKit.swift
+    from: 2.2.5
+targets:
+  PulseLite:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/App
+    dependencies:
+      - target: PulseLiteBroadcast
+        embed: true
+      - target: PulseLiteBroadcastSetupUI
+        embed: true
+      - package: HaishinKit
+        product: HaishinKit
+      - package: HaishinKit
+        product: RTMPHaishinKit
+    entitlements:
+      path: Config/PulseLiteApp.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.pulselite.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pulselite.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+    info:
+      path: Sources/App/Info.plist
+      properties:
+        CFBundleDisplayName: "PulseLite"
+        NSMicrophoneUsageDescription: "PulseLite uses the microphone for live commentary alongside game audio."
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+        PulseAppGroupID: group.com.pulselite.shared
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+
+  PulseLiteBroadcast:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/BroadcastExtension
+    dependencies:
+      - package: HaishinKit
+        product: HaishinKit
+      - package: HaishinKit
+        product: RTMPHaishinKit
+    entitlements:
+      path: Config/PulseLiteBroadcast.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.pulselite.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pulselite.app.broadcast
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+    info:
+      path: Sources/BroadcastExtension/Info.plist
+      properties:
+        CFBundleDisplayName: "PulseLite Broadcaster"
+        PulseAppGroupID: group.com.pulselite.shared
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          NSExtensionAttributes:
+            RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+
+  PulseLiteBroadcastSetupUI:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/BroadcastSetupUI
+    entitlements:
+      path: Config/PulseLiteBroadcast.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.pulselite.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pulselite.app.broadcast-setup
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+    info:
+      path: Sources/BroadcastSetupUI/Info.plist
+      properties:
+        CFBundleDisplayName: "PulseLite Setup"
+        PulseAppGroupID: group.com.pulselite.shared
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-setupui
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).BroadcastSetupViewController
