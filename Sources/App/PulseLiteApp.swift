@@ -100,7 +100,7 @@ final class InAppTestBroadcaster: ObservableObject {
             videoMixerSettings.mode = .passthrough
             await mixer.setVideoMixerSettings(videoMixerSettings)
 
-            await mixer.setFrameRate(Float64(settings.targetFPS))
+          try? await mixer.setFrameRate(Float64(settings.targetFPS))
             var vSettings = await rtmpStream.videoSettings
             vSettings.videoSize = targetSize
             vSettings.bitRate = settings.targetBitrateKbps * 1000
