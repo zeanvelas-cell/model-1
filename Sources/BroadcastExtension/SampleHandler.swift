@@ -100,6 +100,7 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
     private var recorderCoordinator: LocalRecordingCoordinator?
     private var thermalObserver: NSObjectProtocol?
     private var activeCompositor: FrameCompositor?
+    private var reconnectCoordinator: RTMPReconnectCoordinator?
 
     private let stateLock = NSLock()
     private var shouldThrottleTo30FPS: Bool = false
@@ -298,11 +299,28 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
             await mixer.addOutput(rtmpStream)
             await mixer.startRunning()
 
-            let connected = await connectAndPublishWithRetry(
-                ingestURL: initialSettings.ingestServerURL,
-                streamKey: activeKey
+            let coordinator = RTMPReconnectCoordinator(
+                connection: rtmpConnection,
+                stream: rtmpStream,
+                config: .init(ingestURL: initialSettings.ingestServerURL, streamKey: activeKey),
+                onStateChange: { [weak self] state in
+                    AppGroupBridge.updateDiagnostics(
+                        currentMemMB: AppGroupBridge.currentProcessAvailableMemoryMB(),
+                        status: state.displayString
+                    )
+                    if case .failed(let reason) = state {
+                        self?.finishBroadcastWithError(NSError(
+                            domain: "PulseLiteBroadcast",
+                            code: -2,
+                            userInfo: [NSLocalizedDescriptionKey:
+                                "Streaming stopped: \(reason). Check your internet and stream key, then tap the red broadcast button to go live again."]
+                        ))
+                    }
+                }
             )
-            guard connected else { return }
+            self.reconnectCoordinator = coordinator
+            await coordinator.start()
+            guard await coordinator.waitForFirstResult() else { return }
 
             self.audioTask = Task {
                 for await (audioBuffer, trackIndex) in aStream {
@@ -334,30 +352,6 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
                 }
             }
         }
-    }
-
-    private func connectAndPublishWithRetry(ingestURL: String, streamKey: String) async -> Bool {
-        let maxAttempts = 2
-        for attempt in 1...maxAttempts {
-            do {
-                AppGroupBridge.updateDiagnostics(status: attempt == 1 ? "Connecting to RTMPS..." : "Reconnecting (Attempt \(attempt))...")
-                _ = try await rtmpConnection.connect(ingestURL)
-                _ = try await rtmpStream.publish(streamKey)
-                AppGroupBridge.updateDiagnostics(
-                    currentMemMB: AppGroupBridge.currentProcessAvailableMemoryMB(),
-                    status: "LIVE on Stream"
-                )
-                return true
-            } catch {
-                if attempt == maxAttempts {
-                    AppGroupBridge.updateDiagnostics(status: "RTMPS Error: \(error.localizedDescription)")
-                    finishBroadcastWithError(error)
-                    return false
-                }
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
-            }
-        }
-        return false
     }
 
     private func reloadLiveSettingsFromBridge() {
@@ -424,6 +418,7 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
             _ = await audioTask?.value
             await recorderCoordinator?.finish()
 
+            await reconnectCoordinator?.stop()
             try? await rtmpStream.close()
             try? await rtmpConnection.close()
             await mixer.stopRunning()
@@ -475,8 +470,8 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
         }
     }
 
-    private func applyHardwareEncoder(size: CGSize, fps: Int, bitrateKbps: Int) async {try? 
-        await mixer.setFrameRate(Float64(fps))
+    private func applyHardwareEncoder(size: CGSize, fps: Int, bitrateKbps: Int) async {
+        try? await mixer.setFrameRate(Float64(fps))
         var videoSettings = await rtmpStream.videoSettings
         videoSettings.videoSize = size
         videoSettings.bitRate = bitrateKbps * 1000
