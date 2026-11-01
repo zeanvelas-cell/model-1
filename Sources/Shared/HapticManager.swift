@@ -19,15 +19,14 @@ import UIKit
 
 /// Central haptic dispatcher. All methods are no-ops when the user
 /// has disabled haptics in PulseSettings, so it's safe to call everywhere.
+@MainActor
 enum HapticManager {
 
     // MARK: Private helpers
 
     private static func isEnabled() -> Bool {
-        // Reads from the same AppGroup UserDefaults your settings model writes to.
-        // Key must match whatever key PulseSettings saves enableUIHaptics under.
-        let defaults = UserDefaults(suiteName: "group.com.pulselite.shared")
-        return defaults?.bool(forKey: "enableUIHaptics") ?? true
+        // Same setting the Engine drawer saves (PulseSettings.enableUIHaptics).
+        AppGroupBridge.loadSettings().enableUIHaptics
     }
 
     private static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
