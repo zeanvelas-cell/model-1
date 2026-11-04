@@ -32,9 +32,8 @@ public final class BroadcastSetupViewController: UIViewController {
         keyField.autocorrectionType = .no
         if let savedKey = AppGroupBridge.activeAccount()?.primaryStreamKey, !savedKey.isEmpty {
             keyField.text = savedKey
-        } else if let clip = UIPasteboard.general.string, clip.count >= 10 {
-            keyField.text = clip
         }
+        // The key is typed or pasted by the user. We never read the clipboard automatically.
 
         let currentSettings = AppGroupBridge.loadSettings()
         ingestField.placeholder = "rtmps://a.rtmps.youtube.com:443/live2"
