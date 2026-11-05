@@ -36,7 +36,7 @@ jobs:
           zip -r -y PulseLite-Glass-Broadcaster.ipa Payload
 
       - name: Upload Compiled App Artifacts (Simulator ZIP + Device IPA)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: PulseLite-Glass-Builds
           path: |
