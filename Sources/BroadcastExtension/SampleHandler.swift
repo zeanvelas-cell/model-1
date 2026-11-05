@@ -105,7 +105,9 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
     private let stateLock = NSLock()
     private var shouldThrottleTo30FPS: Bool = false
     private var isBroadcastPaused: Bool = false
-    private var incomingVideoFrameIndex: UInt64 = 0
+    /// Timestamp of the last video frame we let through. Used to pace the stream to 30 FPS by TIME,
+    /// so it works whether the game delivers 60, ~30, or uneven frames.
+    private var lastAcceptedVideoPTS: CMTime = .invalid
     private var droppedVideoFrames: Int = 0
     private var includeMicAudio: Bool = true
     private var voiceChatMode: InGameVoiceChatMode = .preLockDualMic
@@ -136,14 +138,30 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
         stateLock.unlock()
     }
 
-    private func shouldProcessVideoFrameSync() -> Bool {
+    /// Decides whether to keep this video frame.
+    /// - Not throttling (60 FPS selected): keep every frame.
+    /// - Throttling to 30 FPS: keep a frame only if enough TIME has passed since the last kept one.
+    ///   * Game sends 60 FPS  -> every other frame is kept (about 30 FPS).
+    ///   * Game sends ~30 FPS -> every frame is kept (nothing is thrown away).
+    ///   * Game sends uneven frames -> output stays near 30 FPS instead of collapsing.
+    /// The 0.8 factor gives some slack for timing jitter, so a steady 30 FPS source is never cut.
+    private func shouldProcessVideoFrameSync(pts: CMTime) -> Bool {
         stateLock.lock()
         defer { stateLock.unlock() }
         guard !isBroadcastPaused else { return false }
-        incomingVideoFrameIndex += 1
-        if shouldThrottleTo30FPS && (incomingVideoFrameIndex % 2 != 0) {
-            return false
+
+        guard pts.isValid, !pts.isIndefinite else { return true }
+
+        if shouldThrottleTo30FPS, lastAcceptedVideoPTS.isValid {
+            let minInterval = (1.0 / 30.0) * 0.8
+            let delta = CMTimeGetSeconds(CMTimeSubtract(pts, lastAcceptedVideoPTS))
+            // delta < 0 means the clock restarted, so accept the frame and re-anchor.
+            if delta >= 0 && delta < minInterval {
+                return false
+            }
         }
+
+        lastAcceptedVideoPTS = pts
         return true
     }
 
@@ -383,7 +401,7 @@ public final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable 
 
         switch sampleBufferType {
         case .video:
-            guard shouldProcessVideoFrameSync() else { return }
+            guard shouldProcessVideoFrameSync(pts: CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) else { return }
             if case .dropped = videoContinuation?.yield(sampleBuffer) {
                 recordDroppedFrameSync()
             }

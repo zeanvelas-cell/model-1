@@ -6,7 +6,7 @@ options:
 packages:
   HaishinKit:
     url: https://github.com/HaishinKit/HaishinKit.swift
-    from: 2.2.5
+    exactVersion: 2.2.5
 targets:
   PulseLite:
     type: application
